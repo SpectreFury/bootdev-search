@@ -1,0 +1,41 @@
+import argparse
+
+from search.search import InvertedIndex, build_command, search_command, search_keyword, termfreq_command
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Keyword search CLI")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    search_parser = subparsers.add_parser("search", help="Search movies using keywords")
+    build_parser  = subparsers.add_parser("build", help="Build a cache for movies")
+    tf_parser  = subparsers.add_parser("tf", help="Search the term frequency given a document id and the term")
+
+    search_parser.add_argument("query", type=str, help="Search query")
+    tf_parser.add_argument("doc_id", type=int, help="Document id to search term frequency in")
+    tf_parser.add_argument("term", type=str, help="The term that is to be searched in the document id")
+
+    args = parser.parse_args()
+
+    match args.command:
+        case "search":
+            query = args.query
+            print(f"Searching for {query}")
+
+            result = search_command(query)
+
+        case "build":
+            build_command()
+
+        case "tf":
+            doc_id = args.doc_id
+            term = args.term
+
+            termfreq_command(doc_id, term)
+
+        case _:
+            parser.print_help()
+
+
+if __name__ == "__main__":
+    main()
