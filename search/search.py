@@ -1,3 +1,4 @@
+import math
 import os
 import pickle
 from utils.data import load_movies, load_stopwords
@@ -132,6 +133,18 @@ def termfreq_command(doc_id: int, term: str):
 
     freq = idx.get_tf(doc_id, token)
     print(f"TF for term: {token} in doc_id: {doc_id} -> {freq}")
+
+def idf_command(term: str):
+    term = tokenize_term(transform_text(term))
+
+    idx = InvertedIndex()
+    idx.load()
+
+    doc_count = len(idx.docmap)
+    term_doc_count = len(idx.index[term])
+
+    idf = math.log((doc_count + 1) / (term_doc_count + 1))
+    print(f"Inverse document frequency of {term}: {idf:.2f}")
 
 
 def tokenize_term(term: str):
