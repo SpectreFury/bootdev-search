@@ -21,6 +21,32 @@ class SemanticSearch:
         self.documents = None
         self.document_map = {}
 
+    def search(self, query: str, limit: int):
+        if self.embeddings is None or not self.embeddings.size:
+            raise ValueError(
+                "No embeddings. Load them using the verify_embedding command."
+            )
+
+        embedding = self.generate_embedding(query)
+
+        score_list = []
+        for i in range(len(self.embeddings)):
+            score = float(cosine_similarity(embedding, self.embeddings[i]))
+            doc = self.documents[i]
+
+            score_list.append((score, doc))
+
+        score_list = sorted(score_list, key=lambda x: x[0], reverse=True)
+
+        return [
+            {
+                "score": item[0],
+                "title": item[1]["title"],
+                "description": item[1]["description"],
+            }
+            for item in score_list[:limit]
+        ]
+
     def verify_model(self):
         print(f"Model loaded: {self.model}")
         print(f"Max sequence length: {self.model.max_seq_length}")
@@ -44,10 +70,13 @@ class SemanticSearch:
         return self.embeddings
 
     def load_or_create_embeddings(self, documents):
+        # Accept both {"movies": [...]} and [...] for convenience
+        if isinstance(documents, dict):
+            documents = documents.get("movies", [])
         self.documents = documents
 
         for document in documents:
-            self.document_map[document["id"]] = document
+            self.document_map[int(document["id"])] = document
 
         if not os.path.exists(EMBEDDING_PATH):
             return self.build_embeddings(documents)
@@ -90,12 +119,25 @@ def embed_text(text: str):
     print(f"Dimensions: {len(output)}")
 
 
+def cosine_similarity(vec1: np.ndarray, vec2: np.ndarray) -> float:
+    dot_product = np.dot(vec1, vec2)
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+
+    return dot_product / (norm1 * norm2)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Semantic search CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    verify_parser = subparsers.add_parser("verify", help="Verify the model information")
-    verify_embeddings_parser = subparsers.add_parser(
+    search_parser = subparsers.add_parser("search", help="Search for the items")
+
+    _ = subparsers.add_parser("verify", help="Verify the model information")
+    _ = subparsers.add_parser(
         "verify_embeddings",
         aliases=["verify_embedding"],
         help="Verify the embeddings",
@@ -104,11 +146,35 @@ def main() -> None:
         "embed", help="Embed the given text into embeddings"
     )
 
+    search_parser.add_argument("query", type=str, help="The query you want to search")
+    search_parser.add_argument(
+        "--limit", type=int, help="The number of elements you want (default 5)"
+    )
+
     embed_parser.add_argument("text", type=str, help="The text to embed")
 
     args = parser.parse_args()
 
     match args.command:
+        case "search":
+            query = args.query
+            limit = args.limit or 5
+
+            semantic_search = SemanticSearch()
+            movies_data = load_movies()
+            # load_movies() returns {"movies": [...]}
+            movies = (
+                movies_data["movies"] if isinstance(movies_data, dict) else movies_data
+            )
+            semantic_search.load_or_create_embeddings(movies)
+
+            result = semantic_search.search(query, limit)
+
+            for i in range(len(result)):
+                print(
+                    f"{i}. {result[i]["title"]}(score: {result[i]["score"]}) \n {result[i]["description"]}"
+                )
+
         case "verify":
             semantic_search = SemanticSearch()
             semantic_search.verify_model()
