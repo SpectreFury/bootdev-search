@@ -5,6 +5,7 @@ from search.search import (
     idf_command,
     search_command,
     termfreq_command,
+    tfidf_command,
 )
 
 
@@ -16,7 +17,10 @@ def main() -> None:
     tf_parser = subparsers.add_parser(
         "tf", help="Search the term frequency given a document id and the term"
     )
-    idf_parser = subparsers.add_parser("idf", help="Search the Inverse document frequency for a term")
+    idf_parser = subparsers.add_parser(
+        "idf", help="Search the Inverse document frequency for a term"
+    )
+    tfidf_parser = subparsers.add_parser("tfidf", help="Find the TF-IDF using a term")
     _ = subparsers.add_parser("build", help="Build a cache for movies")
 
     search_parser.add_argument("query", type=str, help="Search query")
@@ -26,10 +30,11 @@ def main() -> None:
     tf_parser.add_argument(
         "term", type=str, help="The term that is to be searched in the document id"
     )
-    
-    idf_parser.add_argument(
-        "term", type=str, help="The term to find the IDF for"
-    )
+
+    idf_parser.add_argument("term", type=str, help="The term to find the IDF for")
+
+    tfidf_parser.add_argument("doc_id", type=int, help="Document id")
+    tfidf_parser.add_argument("term", type=str, help="The term to find the IDF for")
 
     args = parser.parse_args()
 
@@ -54,6 +59,13 @@ def main() -> None:
 
             # A higher IDF is a more rare word and vice versa
             idf_command(term)
+
+        case "tfidf":
+            doc_id = args.doc_id
+            term = args.term
+
+            tfidf_command(doc_id, term)
+
 
         case _:
             parser.print_help()

@@ -12,6 +12,16 @@ INDEX_FILE_PATH = os.path.join(CACHE_PATH, "index.pkl")
 DOCMAP_FILE_PATH = os.path.join(CACHE_PATH, "docmap.pkl")
 TERMFREQ_FILE_PATH = os.path.join(CACHE_PATH, "term_frequencies.pkl")
 
+stemmer = PorterStemmer()
+
+
+def preprocess_tokens(text: str) -> list[str]:
+    return [stemmer.stem(t) for t in tokenize_text(transform_text(text))]
+
+
+def preprocess_term(term: str) -> str:
+    return stemmer.stem(tokenize_term(transform_text(term)))
+
 
 class InvertedIndex:
     def __init__(self):
@@ -20,7 +30,7 @@ class InvertedIndex:
         self.term_frequencies = defaultdict(Counter)
 
     def __add_document(self, doc_id: int, text: str):
-        tokens = tokenize_text(transform_text(text))
+        tokens = preprocess_tokens(text)
         for token in tokens:
             self.index[token].add(doc_id)
 
@@ -32,11 +42,11 @@ class InvertedIndex:
         return sorted(list(doc_ids))
 
     def get_tf(self, doc_id, term):
-        freq = self.term_frequencies[doc_id][term]
-        if not freq:
+        counter = self.term_frequencies.get(doc_id)
+        if not counter:
             return 0
 
-        return freq
+        return counter[term]
 
     def build(self):
         movies_data = load_movies()
@@ -95,9 +105,6 @@ class InvertedIndex:
         print("Successfully loaded into index and docmap and term frequencies")
 
 
-stemmer = PorterStemmer()
-
-
 def build_command():
     idx = InvertedIndex()
     idx.build()
@@ -108,8 +115,7 @@ def search_command(query: str):
     idx = InvertedIndex()
     idx.load()
 
-    preprocessed_query = transform_text(query)
-    tokens = tokenize_text(preprocessed_query)
+    tokens = preprocess_tokens(query)
 
     res = []
     for token in tokens:
@@ -126,7 +132,7 @@ def search_command(query: str):
 
 
 def termfreq_command(doc_id: int, term: str):
-    token = tokenize_term(transform_text(term))
+    token = preprocess_term(term)
 
     idx = InvertedIndex()
     idx.load()
@@ -134,21 +140,40 @@ def termfreq_command(doc_id: int, term: str):
     freq = idx.get_tf(doc_id, token)
     print(f"TF for term: {token} in doc_id: {doc_id} -> {freq}")
 
+def compute_idf(idx: InvertedIndex, token: str) -> float:
+    doc_count = len(idx.docmap)
+    term_doc_count = len(idx.index.get(token, set()))
+
+    return math.log((doc_count + 1) / (term_doc_count + 1))
+
+
 def idf_command(term: str):
-    term = tokenize_term(transform_text(term))
+    token = preprocess_term(term)
 
     idx = InvertedIndex()
     idx.load()
 
-    doc_count = len(idx.docmap)
-    term_doc_count = len(idx.index[term])
+    idf = compute_idf(idx, token)
+    print(f"Inverse document frequency of {token}: {idf:.2f}")
+    return idf
 
-    idf = math.log((doc_count + 1) / (term_doc_count + 1))
-    print(f"Inverse document frequency of {term}: {idf:.2f}")
+def tfidf_command(doc_id: int, term: str):
+    token = preprocess_term(term)
+
+    idx = InvertedIndex()
+    idx.load()
+
+    tf_score = idx.get_tf(doc_id, token)
+    idf_score = compute_idf(idx, token)
+
+    tf_idf = tf_score * idf_score
+    print(f"TF-IDF score of '{token}' in document '{doc_id}': {tf_idf:.2f}")
 
 
 def tokenize_term(term: str):
     token_list = tokenize_text(term)
+    if not token_list:
+        raise RuntimeError("Empty term")
     if len(token_list) > 1:
         raise RuntimeError("Too many terms")
 
